@@ -169,7 +169,7 @@ const commands: Record<string, CommandHandler> = {
       inputDisabled.value = false
       formatResponse(result)
    }),
-   'trigger_event': expectOneArg(async ([event,...args]) => {
+   'trigger_event': expectTwoArgs(async ([event,...args]) => {
       inputDisabled.value = true
       const result = await debugTriggerEvent(event,args)
       inputDisabled.value = false
