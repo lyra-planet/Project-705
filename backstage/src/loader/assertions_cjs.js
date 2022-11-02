@@ -15,19 +15,13 @@ const identAssertion = 'string'.sumWith({
 
 const translationKeyAssertion = identAssertion
 
-const translatableAssertion = translationKeyAssertion.sumWith({
-   template: translationKeyAssertion,
-   args: 'object'
-})
-
-const attributesAssertion = {
-   strength: 'number?',
-   emotionalIntelligence: 'number?',
-   intelligence: 'number?',
-   memorization: 'number?',
-   imagination: 'number?',
-   charisma: 'number?'
+const composedTranslatableAssertion = {
+   template: translationKeyAssertion
 }
+
+const translatableAssertion = translationKeyAssertion.sumWith(composedTranslatableAssertion)
+
+composedTranslatableAssertion.args = 'object'.assertObjectValue(translatableAssertion)
 
 const patchModeAssertion = {
    patch: 'string'.chainWith(x => x === 'patch' || x === 'overwrite').orNull()
@@ -53,20 +47,15 @@ const baseAssertion = {
    description: translationKeyAssertion,
 }
 
+const propertiesAssertion = 'object'.assertObjectValue('number')
+
 const activityAssertion = {
    ...baseAssertion,
 
    category: 'string',
    level: 'number',
 
-   output: {
-      attributes: attributesAssertion.orNull(),
-      talent: 'undefined',
-      skillPoints: 'number?',
-      pressure: 'number?',
-      satisfactory: 'number?',
-      money: 'number?'
-   }.orNull(),
+   output: propertiesAssertion.orNull(),
    events: eventSeriesAssertion.orNull(),
 
    ...patchModeAssertion
@@ -89,11 +78,9 @@ const skillAssertion = {
    potential: [identAssertion.sumWith(potentialExpressionAssertion)].orNull(),
    cost: {
       base: 'number',
-      attributes: attributesAssertion.orNull(),
+      properties: propertiesAssertion.orNull()
    },
-   output: {
-      attributes: attributesAssertion
-   }.orNull(),
+   output: propertiesAssertion.orNull(),
    activities: [identAssertion].orNull(),
    events: eventSeriesAssertion.orNull(),
 
@@ -102,17 +89,7 @@ const skillAssertion = {
 
 const startupAssertion = {
    ...baseAssertion,
-
-   player: {
-      attributes: attributesAssertion.orNull(),
-      talent: attributesAssertion.orNull(),
-      skillPoints: 'number?',
-      pressure: 'number?',
-      satisfactory: 'number?',
-      money: 'number?'
-   }.orNull(),
    events: eventSeriesAssertion.orNull(),
-   modifier: identAssertion.orNull(),
 
    ...patchModeAssertion
 }
@@ -124,30 +101,15 @@ const eventAssertion = {
    ...patchModeAssertion
 }
 
-const attributeModifiersAssertion = {
-   strength: 'object?',
-   intelligence: 'object?',
-   emotionalIntelligence: 'object?',
-   memorization: 'object?',
-   imagination: 'object?',
-   charisma: 'object?'
-}
+const propertyModifierAssertion = 'object'.assertObjectValue({ gain: 'number?', loss: 'number?' })
 
 const modifierAssertion = {
    ...baseAssertion,
+   icon: 'string?',
+   player: 'object?'.assertObjectValue(propertyModifierAssertion),
+   skillPointCost: 'object?'.assertObjectValue('number'),
 
-   player: ({
-      attributes: attributeModifiersAssertion.orNull(),
-      talent: attributeModifiersAssertion.orNull(),
-
-      skillPoints: 'object?',
-      energy: 'object?',
-      mentalHealth: 'object?',
-      satisfactory: 'object?',
-      money: 'object?',
-      moneyPerTurn: 'object?'
-   }).sumWith('function').orNull(),
-   skillPointCost: 'object'.sumWith('function').orNull()
+   ...patchModeAssertion
 }
 
 const storeItemBaseAssertion = {
@@ -199,23 +161,40 @@ const storeItemsAssertion = {
    tradableItems: [tradableItemAssertion].orNull()
 }
 
-const ruleSetAssertion = {
+const ruleSetDescriptorAssertion = {
    ident: {
       author: 'string',
       moduleName: 'string'
    },
    description: 'string?',
-
    skillCategories: [].orNull(),
    activityCategories: ['string'].orNull(),
+}
+
+const ruleSetContentAssertion = {
    skills: [skillAssertion].orNull(),
    startups: [startupAssertion].orNull(),
    activities: [activityAssertion].orNull(),
    ascensionPerks: [ascensionPerkAssertion].orNull(),
+   storeItems: storeItemsAssertion.orNull(),
    events: [eventAssertion].orNull(),
    modifiers: [modifierAssertion].orNull(),
    translations: {}.orNull()
 }
+
+const ruleSetAssertion = {
+   highOrder: 'boolean'.assertValue(false).orNull(),
+   descriptor: ruleSetDescriptorAssertion,
+   content: ruleSetContentAssertion
+}
+
+const highOrderRuleSetAssertion = {
+   highOrder: 'boolean'.assertValue(true),
+   descriptor: ruleSetDescriptorAssertion,
+   generator: 'function'
+}
+
+const moduleAssertion = ruleSetAssertion.sumWith(highOrderRuleSetAssertion)
 
 module.exports = {
    activityAssertion,
@@ -225,5 +204,9 @@ module.exports = {
    eventAssertion,
    modifierAssertion,
 
-   ruleSetAssertion
+   ruleSetDescriptorAssertion,
+   ruleSetContentAssertion,
+   ruleSetAssertion,
+   highOrderRuleSetAssertion,
+   moduleAssertion
 }

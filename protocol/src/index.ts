@@ -1,13 +1,15 @@
 import {
    ITranslationKey
 } from './translation'
-import { IPartialPlayerAttributes, IPlayerStatus } from './player'
+import { IPlayerStatus } from './player'
 import { IComputedAscensionPerks, IComputedSkills } from './computed'
 import { IShopStatus } from './shop'
+import { IMapStatus } from './map_site'
 
 export * from './activity'
 export * from './ascension_perk'
 export * from './computed'
+export * from './map_site'
 export * from './player'
 export * from './potential'
 export * from './skill'
@@ -27,17 +29,11 @@ export interface IGameState {
    modifiers?: string[]
    variables?: Record<string, any>
 
+   map?: IMapStatus
+
    computedModifier?: object
    computedSkills?: IComputedSkills
    computedAscensionPerks?: IComputedAscensionPerks
-}
-
-export interface IStartupPlayerProperties {
-   attributes?: IPartialPlayerAttributes
-   talent?: IPartialPlayerAttributes
-   skillPoints?: number
-   money?: number
-   moneyPerTurn?: number
 }
 
 export interface IResponseSuccess<R> {

@@ -3,19 +3,18 @@ import {
    Modifier,
    SkillCategory,
    Scope,
-   StoreItem,
    ConsumableItem,
    PassiveRelicItem,
-   RechargeableItem, ActiveRelicItem, TradableItem
+   RechargeableItem, ActiveRelicItem, TradableItem, MapSite, Module, RuleSetDescriptor
 } from '@app/ruleset'
 import { typeAssert } from '@app/util/type_assert'
-import { ruleSetAssertion } from '@app/loader/assertions'
+import { moduleAssertion, ruleSetContentAssertion } from '@app/loader/assertions'
 import { Event, MaybeInlineEvent } from '@app/ruleset/items/event'
 import { Skill } from '@app/ruleset/items/skill'
 import { AscensionPerk } from '@app/ruleset/items/ascension_perk'
 import { Activity } from '@app/ruleset/items/activity'
 import { Startup } from '@app/ruleset/items/startup'
-import { compileRuleSet, preCompileRuleSet } from '@app/loader/blending'
+import { compileRuleSet, preloadRulesetDescriptor } from '@app/loader/blending'
 import { abort } from '@app/util/emergency'
 
 import coreRuleSet from '@rulesets/core_ruleset'
@@ -23,7 +22,6 @@ import debugRuleSet from '@rulesets/debug_ruleset'
 import {
    BubbleMessageTemplate,
    Button,
-   CustomScoreBoard,
    Menu,
    SimpleDialogTemplate
 } from '@app/ruleset/items/ui'
@@ -32,7 +30,7 @@ export function loadDynamicMod(modName: string): [RuleSet | null, any] {
    try {
       const mod = require(`${process.cwd()}/mods/${modName}`)
 
-      typeAssert(mod, ruleSetAssertion)
+      typeAssert(mod, moduleAssertion)
       return [mod as RuleSet, null]
    } catch (e) {
       return [null, e]
@@ -52,7 +50,6 @@ export class CompiledStoreItems {
 export class CompiledCustomUI {
    menus: Record<string, Menu> = {}
    buttons: Record<string, Button> = {}
-   scoreBoards: Record<string, CustomScoreBoard> = {}
 
    dialogTemplates: Record<string, SimpleDialogTemplate> = {}
    bubbleMessageTemplates: Record<string, BubbleMessageTemplate> = {}
@@ -69,6 +66,7 @@ export class CompiledRuleSet {
    activities: Record<string, Activity> = {}
    ascensionPerks: Record<string, AscensionPerk> = {}
    startups: Record<string, Startup> = {}
+   mapSites: Record<string, MapSite> = {}
    storeItems: CompiledStoreItems = new CompiledStoreItems()
    ui: CompiledCustomUI = new CompiledCustomUI()
 
@@ -81,7 +79,7 @@ export function load(): CompiledRuleSet {
    const ret = new CompiledRuleSet()
    const modList: string[] = require(`${process.cwd()}/mods/mods.json`)
 
-   let mods: RuleSet[]
+   let mods: Module[]
    try {
       mods = modList.map((modName: string) => {
          const [mod, err] = loadDynamicMod(modName)
@@ -95,16 +93,19 @@ export function load(): CompiledRuleSet {
       abort()
    }
 
-   // precompile: load all skill categories and activity categories for further use
+   // preload: load all descriptors for further use
+   const ruleSetSummary: RuleSetDescriptor[] = []
 
    if (process.env.SKIP_CORE_RULESET !== '1') {
       console.info('[I] [load] pre-compiling core ruleset')
-      preCompileRuleSet(ret, coreRuleSet)
+      ruleSetSummary.push(coreRuleSet.descriptor)
+      preloadRulesetDescriptor(ret, coreRuleSet.descriptor)
    }
 
    if (process.env.DEBUG === '1') {
       console.info('[I] [load] pre-compiling debug ruleset')
-      preCompileRuleSet(ret, debugRuleSet)
+      ruleSetSummary.push(debugRuleSet.descriptor)
+      preloadRulesetDescriptor(ret, debugRuleSet.descriptor)
    }
 
    for (const idx in modList) {
@@ -112,7 +113,8 @@ export function load(): CompiledRuleSet {
       const mod = mods[idx]
 
       console.info(`[I] [load] pre-compiling mod '${modName}'`)
-      preCompileRuleSet(ret, mod)
+      ruleSetSummary.push(mod.descriptor)
+      preloadRulesetDescriptor(ret, mod.descriptor)
    }
 
    // compile: actually instantiate all things required
@@ -120,7 +122,7 @@ export function load(): CompiledRuleSet {
    if (process.env.SKIP_CORE_RULESET !== '1') {
       console.info('[I] [load] loading core ruleset')
       try {
-         compileRuleSet(ret, coreRuleSet)
+         compileRuleSet(ret, coreRuleSet.descriptor, coreRuleSet.generator(ruleSetSummary))
       } catch (e) {
          console.error(`[E] [load] error compiling core ruleset: ${e}\n${e.stack}`)
          abort()
@@ -130,7 +132,7 @@ export function load(): CompiledRuleSet {
    if (process.env.DEBUG === '1') {
       console.info('[I] [load] debug mode enabled, also loading debug ruleset')
       try {
-         compileRuleSet(ret, debugRuleSet)
+         compileRuleSet(ret, debugRuleSet.descriptor, debugRuleSet.content)
       } catch (e) {
          console.error(`[E] [load] error compiling debug ruleset: ${e}\n${e.stack}`)
          abort()
@@ -142,12 +144,26 @@ export function load(): CompiledRuleSet {
       const mod = mods[idx]
 
       try {
+         let ruleSetContent
+         if (mod.highOrder) {
+            ruleSetContent = mod.generator(ruleSetSummary)
+            typeAssert(ruleSetContent, ruleSetContentAssertion)
+         } else {
+            ruleSetContent = mod.content
+         }
+
          console.info(`[I] [load] compiling mod '${modName}'`)
-         compileRuleSet(ret, mod!)
+         compileRuleSet(ret, mod.descriptor, ruleSetContent)
       } catch (e) {
          console.error(`[E] [load] error compiling mod '${modName}': ${e}\n${e.stack}`)
          abort()
       }
+   }
+
+   if (Object.keys(ret.mapSites).length === 0) {
+      console.error('[E] [load] map generator will not work with no map sites defined, '
+                    + 'this should not happen in common case')
+      abort()
    }
 
    return Object.freeze(ret)

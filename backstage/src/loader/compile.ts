@@ -10,8 +10,9 @@ import {
    mAscensionPerkId,
    mModifierId,
    mDisplayItemId,
-   mVarName,
-   isTranslationKey, mStoreItemId
+   isTranslationKey,
+   mStoreItemId,
+   mMapSiteId, mPropertyId
 } from '@app/base/uid'
 import {
    PotentialExpression,
@@ -24,13 +25,14 @@ import {
    Activity,
    AscensionPerk, ConsumableItem,
    Event,
+   MapBranch,
+   MapSite,
+   MapSiteIdentSelector,
    MaybeInlineEvent,
-   Modifier, PassiveRelicItem,
-   PlayerModifier,
-   PlayerModifierGen, RechargeableItem,
+   Modifier,
+   PassiveRelicItem, PlayerPropertyModifier,
+   RechargeableItem,
    Skill,
-   SkillPointCostModifier,
-   SkillPointCostModifierGen,
    Startup,
    StoreItem,
    StoreItemKind,
@@ -41,7 +43,6 @@ import { MaybeTranslatable } from '@app/base/translation'
 import {
    BubbleMessageTemplate,
    Button,
-   CustomScoreBoard,
    DialogOption,
    Menu,
    MenuItem,
@@ -142,14 +143,7 @@ export function compileStartup(scope: Scope, startup: Startup): Startup {
    const itemBase = compileBase(scope, startup, mStartupId)
 
    const events = compileEventSeries(scope, startup.events)
-   const { player, modifier } = startup
-   return {
-      ...itemBase,
-
-      player,
-      modifier: modifier ? mModifierId(scope, modifier) : undefined,
-      events
-   }
+   return { ...itemBase, events }
 }
 
 export function compileActivity(scope: Scope, activity: Activity): Activity {
@@ -184,6 +178,41 @@ export function compileAscensionPerk(scope: Scope, ascensionPerk: AscensionPerk)
       potential,
       modifier: modifier ? mModifierId(scope, modifier) : undefined,
       events
+   }
+}
+
+export function compileMapSite(scope: Scope, mapSite: MapSite): MapSite {
+   const itemBase = compileBase(scope, mapSite, mMapSiteId)
+   const { energyCost } = mapSite
+   const potentials = mapSite.potentials?.map(mapPotential => compilePotentialExpression(scope, mapPotential))
+   const events = compileEventSeries(scope, mapSite.events)
+   const branches: [MapBranch, MapBranch?] = <any>mapSite.branches.map(
+      branch => {
+         if (branch === undefined) {
+            return undefined
+         }
+         const { selector } = branch
+         if (selector.type === 'by_ident') {
+            const the = <MapSiteIdentSelector>selector
+            const idents = the.idents.map(ident => mMapSiteId(scope, ident))
+            return <MapBranch>{
+               selector: <MapSiteIdentSelector>{
+                  type: selector.type,
+                  idents,
+               },
+               description: mTranslationKey(scope, branch.description)
+            }
+         }
+         return <MapBranch>{ ...branch, description: mTranslationKey(scope, branch.description) }
+      }
+   )
+   return {
+      ...itemBase,
+
+      energyCost,
+      potentials,
+      events,
+      branches,
    }
 }
 
@@ -261,43 +290,22 @@ export function compileTradableItem(scope: Scope, tradable: TradableItem): Trada
    }
 }
 
+function compilePlayerPropertyModifier(scope: Scope, modifier: PlayerPropertyModifier): PlayerPropertyModifier {
+   const ret: PlayerPropertyModifier = {}
+   for (const propertyId in modifier) {
+      ret[mPropertyId(scope, propertyId)] = modifier[propertyId]
+   }
+   return ret
+}
+
 export function compileModifier(compilation: CompiledRuleSet, scope: Scope, modifier: Modifier): Modifier {
-   function compilePlayerModifier(
-      playerModifier: PlayerModifier | PlayerModifierGen | undefined
-   ): PlayerModifier | undefined {
-      if (!playerModifier) {
-         return undefined
-      }
-
-      if (playerModifier instanceof Function) {
-         return playerModifier(compilation)
-      } else {
-         return playerModifier
-      }
-   }
-
-   function compileSkillPointCostModifier(
-      skillPointCostModifier: SkillPointCostModifier | SkillPointCostModifierGen | undefined
-   ): SkillPointCostModifier | undefined {
-      if (!skillPointCostModifier) {
-         return undefined
-      }
-
-      if (skillPointCostModifier instanceof Function) {
-         return skillPointCostModifier(compilation)
-      } else {
-         return skillPointCostModifier
-      }
-   }
-
    const itemBase = compileBase(scope, modifier, mModifierId)
-   const { player, skillPointCost } = modifier
+   const { playerProperty, skillPointCost } = modifier
 
    return {
       ...itemBase,
-
-      player: compilePlayerModifier(player),
-      skillPointCost: compileSkillPointCostModifier(skillPointCost),
+      playerProperty: playerProperty ? compilePlayerPropertyModifier(scope, playerProperty) : undefined,
+      skillPointCost
    }
 }
 
@@ -323,16 +331,6 @@ export function compileMenuItem(scope: Scope, item: MenuItem): MenuItem {
 
          children: menu.children.map(child => compileMenuItem(scope, child))
       }
-   }
-}
-
-export function compileScoreBoard(scope: Scope, scoreboard: CustomScoreBoard): CustomScoreBoard {
-   return {
-      ident: mDisplayItemId(scope, scoreboard.ident),
-      tooltip: compileTranslatable(scope, scoreboard.tooltip),
-      color: scoreboard.color,
-      value: scoreboard.value ? compileTranslatable(scope, scoreboard.value) : undefined,
-      bind: scoreboard.bind ? mVarName(scope, scoreboard.bind) : undefined
    }
 }
 

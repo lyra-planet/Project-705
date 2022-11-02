@@ -7,15 +7,15 @@ import {
    compileAscensionPerk,
    compileBubbleMessageTemplate, compileConsumableItem,
    compileEvent,
+   compileMapSite,
    compileMenuItem,
    compileModifier, compilePassiveRelicItem, compileRechargeableItem,
-   compileScoreBoard,
    compileSimpleDialogTemplate,
    compileSkill,
    compileStartup, compileTradableItem,
    compileTranslation
 } from '@app/loader/compile'
-import { RuleSet, RuleSetStoreItems, StoreItem, StoreItemKind } from '@app/ruleset'
+import { RuleSetContent, RuleSetDescriptor, RuleSetStoreItems, StoreItem, StoreItemKind } from '@app/ruleset'
 import { Button, CustomUI, Menu } from '@app/ruleset/items/ui'
 
 export function compileSkillCategories(compilation: CompiledRuleSet, skillCategories: SkillCategory[]) {
@@ -114,6 +114,8 @@ export const compileAscensionPerks = buildCompileSeries(
    compileAscensionPerk
 )
 
+export const compileMapSites = buildCompileSeries('map site', 'mapSites', 'compileMapSites', compileMapSite)
+
 export const compileEvents = buildCompileSeries('event', 'events', 'compileEvents', compileEvent)
 
 export const compileModifiers = buildCompileSeries2('modifier', 'modifiers', 'compileModifiers', compileModifier)
@@ -209,7 +211,7 @@ export function compileStoreItems(compilation: CompiledRuleSet, scope: Scope, st
 
 function buildCompileUISeries<T extends HasIdent>(
    itemName: string,
-   seriesName: 'scoreBoards' | 'dialogTemplates' | 'bubbleMessageTemplates',
+   seriesName: 'dialogTemplates' | 'bubbleMessageTemplates',
    fnName: string,
    compileSingleFn: CompileSingleFunction<T>
 ): CompileFunction<T> {
@@ -230,13 +232,6 @@ function buildCompileUISeries<T extends HasIdent>(
       }
    }
 }
-
-export const compileScoreBoards = buildCompileUISeries(
-   'score board',
-   'scoreBoards',
-   'compileScoreBoard',
-   compileScoreBoard
-)
 
 export const compileDialogTemplates = buildCompileUISeries(
    'dialog template',
@@ -281,10 +276,6 @@ export function compileUI(compilation: CompiledRuleSet, scope: Scope, ui: Custom
       }
    }
 
-   if (ui.scoreBoards) {
-      compileScoreBoards(compilation, scope, ui.scoreBoards)
-   }
-
    if (ui.dialogTemplates) {
       compileDialogTemplates(compilation, scope, ui.dialogTemplates)
    }
@@ -316,14 +307,14 @@ export function compileTranslations(
    }
 }
 
-export function preCompileRuleSet(compilation: CompiledRuleSet, ruleSet: RuleSet) {
-   const { ident, skillCategories, activityCategories } = ruleSet
+export function preloadRulesetDescriptor(compilation: CompiledRuleSet, descriptor: RuleSetDescriptor) {
+   const { ident, skillCategories, activityCategories } = descriptor
 
    if (compilation.loadedRuleSets.find(
       thatIdent => thatIdent.moduleName === ident.moduleName
          && thatIdent.author === ident.author
    )) {
-      console.warn(`[W] [preCompileRuleSet] duplicate mod identifier: '${ident.author}:${ident.moduleName}'`)
+      console.warn(`[W] [loadRulesetDescriptor] duplicate mod identifier: '${ident.author}:${ident.moduleName}'`)
    }
 
    compilation.loadedRuleSets.push(ident)
@@ -337,14 +328,15 @@ export function preCompileRuleSet(compilation: CompiledRuleSet, ruleSet: RuleSet
    }
 }
 
-export function compileRuleSet(compilation: CompiledRuleSet, ruleSet: RuleSet) {
+export function compileRuleSet(compilation: CompiledRuleSet, descriptor: RuleSetDescriptor, ruleSet: RuleSetContent) {
+   const scope = descriptor.ident
    const {
-      ident: scope,
       skills,
       startups,
       activities,
       ascensionPerks,
       storeItems,
+      mapSites,
       events,
       modifiers,
       translations,
@@ -370,6 +362,10 @@ export function compileRuleSet(compilation: CompiledRuleSet, ruleSet: RuleSet) {
 
    if (storeItems) {
       compileStoreItems(compilation, scope, storeItems)
+   }
+
+   if (mapSites) {
+      compileMapSites(compilation, scope, mapSites)
    }
 
    if (events) {

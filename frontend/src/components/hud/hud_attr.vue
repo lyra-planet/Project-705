@@ -13,7 +13,9 @@
          <AttrIcon class="icon"
                    type="satisfactory" />
          <span class="label">评价</span>
-         <span class="value"> {{ props.playerStatus.satisfactory }} </span>
+         <span class="value">
+            {{ props.playerStatus.properties['@satisfactory'].value }}
+         </span>
       </div>
 
       <div class="status-item"
@@ -24,13 +26,13 @@
               alt="icon"
          >
          <span class="label">其他</span>
-         <span class="value"> {{ 114514 }} </span>
+         <span class="value"> {{ otherItems[0] }} </span>
       </div>
 
       <Transition>
          <div v-if="expand"
               class="other-items">
-            <div v-for="(item, idx) in otherItems"
+            <div v-for="(item, idx) in otherItems[1]"
                  :key="idx">
                {{ item[0] }}
                <div class="value">
@@ -59,40 +61,64 @@
 
 <script setup lang="ts">
 
-import { IPlayerAttributes, IPlayerStatus } from '@protocol/index'
+import { IPlayerStatus } from '@protocol/index'
 import AttrIcon from '@app/components/icon/attr_icon.vue'
 import menuIcons from '@app/assets/components/hud'
 import { computed, ref } from 'vue'
+import {translate} from '@app/util/translation'
+
+const builtinPropertyIdSet = new Set([
+   '@intelligence',
+   '@emotional_intelligence',
+   '@memorization',
+   '@strength',
+   '@imagination',
+   '@charisma',
+   '@energy',
+   '@money',
+   '@skill_point',
+   '@mental_health',
+   '@injury',
+   '@satisfactory'
+])
 
 const props = defineProps<{ playerStatus: IPlayerStatus }>()
 const expand = ref(false)
 
-const itemKeys: [string, keyof IPlayerAttributes][] = [
+const itemKeys: [string, string][] = [
    ['智商', 'intelligence'],
-   ['情商', 'emotionalIntelligence'],
+   ['情商', 'emotional_intelligence'],
    ['记忆力', 'memorization'],
    ['想象力', 'imagination'],
    ['体魄', 'strength'],
    ['魅力', 'charisma']
 ]
 
-const attributeItems = computed(() => itemKeys.map(itemKey => {
-   const [displayName, field] = itemKey
-   return [
-      displayName,
-      field,
-      props.playerStatus.attributes![field],
-      props.playerStatus.talent![field]
-   ]
-}))
+const attributeItems = computed(() => {
+   return itemKeys.map(itemKey => {
+      const [displayName, propertyId] = itemKey
+      return [
+         displayName,
+         propertyId,
+         props.playerStatus.properties![`@${propertyId}`].value,
+         props.playerStatus.properties![`@${propertyId}`].increment ?? 0
+      ]
+   })
+})
 
-const otherItems = [
-   ['还无法说出我爱你', 3141],
-   ['因为我还不敢确定', 5926],
-   ['山盟海誓的重力', 5358],
-   ['是不是会拖垮我', 9793],
-   ['濒临透明的身躯', 2384],
-]
+const otherItems = computed(() => {
+   let sum = 0
+   const items = []
+   const properties = props.playerStatus.properties!
+   for (const propertyId in properties) {
+      if (!builtinPropertyIdSet.has(propertyId)) {
+         const property = properties[propertyId]
+         items.push([translate(property.name), property.value])
+         sum += property.value
+      }
+   }
+   return [sum, items]
+})
 
 const injured = Array(3).fill(true)
 
@@ -102,10 +128,14 @@ const rescale = (mentalHealth: number, mentalHealthMax: number) => {
    return r * 100
 }
 
-const energyBarTitle = computed(() => `${props.playerStatus.mentalHealth} / ${props.playerStatus.mentalHealthMax}`)
+const energyBarTitle = computed(() => {
+   const property = props.playerStatus.properties!['@mental_health']
+   return `${property.value} / ${property.max}`
+})
 
 const energyBarWidth = computed(() => {
-   const percentage = rescale(props.playerStatus.mentalHealth!, props.playerStatus.mentalHealthMax!)
+   const property = props.playerStatus.properties!['@mental_health']
+   const percentage = rescale(property.value, property.max!)
    return `${percentage}%`
 })
 

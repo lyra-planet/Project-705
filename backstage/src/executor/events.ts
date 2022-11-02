@@ -1,29 +1,14 @@
 import { mEventId, Scope } from '@app/base/uid'
-import { ensureScope } from '@app/executor/base'
 import { GameContext } from '@app/executor/game_context'
 import { EventFunction, MaybeInlineEvent } from '@app/ruleset/items/event'
 import { concatMessage, QResult } from '@app/executor/result'
-
-export function pushScope(gameContext: GameContext, scope: Scope) {
-   if (gameContext.scope) {
-      gameContext.scopeChain.push(gameContext.scope)
-   }
-   gameContext.scope = scope
-}
-
-export function popScope(gameContext: GameContext) {
-   if (gameContext.scopeChain.length === 0) {
-      gameContext.scope = undefined
-      return
-   }
-
-   gameContext.scope = gameContext.scopeChain.pop()
-}
+import { ensureScope, popScope, pushScope } from '@app/executor/game_context/scope'
 
 export function triggerEvent(
-   gameContext: GameContext, 
-   event: MaybeInlineEvent, 
-   ...args: any[]): QResult {
+   gameContext: GameContext,
+   event: MaybeInlineEvent,
+   ...args: any[]
+): QResult {
    const scope = ensureScope(gameContext)
 
    let unsetCounter = false
@@ -70,7 +55,7 @@ export function triggerEvent(
       }
 
       console.debug(`[D] [triggerEvent] triggered event '${eventId}'`)
-      const hooks = gameContext.state.events.eventsTriggered[eventId]
+      const hooks = gameContext.state.events.eventTriggered[eventId]
       for (const hook in hooks) {
          const [success, message] = triggerEvent(gameContext, hook, event, [event, args])
          warnMessage = concatMessage(warnMessage, message)
@@ -98,7 +83,12 @@ export function triggerEvent(
    return [true, warnMessage]
 }
 
-export function triggerEventSeries(gameContext: GameContext, events?: MaybeInlineEvent[], scope?: Scope): QResult {
+export function triggerEventSeries(
+   gameContext: GameContext,
+   events?: MaybeInlineEvent[],
+   scope?: Scope,
+   ...args: any[]
+): QResult {
    if (scope) {
       pushScope(gameContext, scope)
    }
@@ -106,7 +96,7 @@ export function triggerEventSeries(gameContext: GameContext, events?: MaybeInlin
    let warnMessage
    if (events) {
       for (const event of events) {
-         const [success, message] = triggerEvent(gameContext, event)
+         const [success, message] = triggerEvent(gameContext, event, ...args)
          warnMessage = concatMessage(warnMessage, message)
       }
    }
